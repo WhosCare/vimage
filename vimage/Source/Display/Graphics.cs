@@ -6,6 +6,7 @@ using Tao.OpenGl;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
+using SFML.Window;
 
 namespace vimage
 {
@@ -32,6 +33,11 @@ namespace vimage
             Texture.Bind(null);
         }
 
+        public static AdvancedImage GetAdvancedImage(string fileName, bool smooth = true)
+        {
+            AdvancedImage image = new AdvancedImage(fileName);
+            return image;
+        }
         public static Sprite GetSprite(string fileName, bool smooth = false)
         {
             Sprite sprite = new Sprite(GetTexture(fileName));
@@ -125,6 +131,117 @@ namespace vimage
             Texture.Bind(null);
 
             return texture;
+        }
+
+        public static List<List<Texture>> GetTextures(string fileName)
+        {
+            // New Texture
+            List<List<Texture>> textures = null;
+            int imageID = IL.GenerateImage();
+            IL.BindImage(imageID);
+
+            IL.Enable(ILEnable.AbsoluteOrigin);
+            IL.SetOriginLocation(DevIL.OriginLocation.UpperLeft);
+
+            bool loaded = false;
+            using (FileStream fileStream = File.OpenRead(fileName))
+                loaded = IL.LoadImageFromStream(fileStream);
+
+            if (loaded)
+            {
+                textures = GetTexturesFromBoundImage();
+            }
+            IL.DeleteImages(new ImageID[] { imageID });
+
+            return textures;
+        }
+        private static List<List<Texture>> GetTexturesFromBoundImage(int imageNum = 0)
+        {
+            IL.ActiveImage(imageNum);
+
+            bool success = IL.ConvertImage(DevIL.DataFormat.RGBA, DevIL.DataType.UnsignedByte);
+
+            if (!success)
+                return null;
+
+            int width = IL.GetImageInfo().Width;
+            int height = IL.GetImageInfo().Height;
+
+            int sectionSize = TextureMaxSize;
+
+            List<List<Texture>> textures = new List<List<Texture>>();
+            Vector2u amount = new Vector2u((uint)Math.Ceiling(width / (float)sectionSize), (uint)Math.Ceiling(height / (float)sectionSize));
+
+            if (amount.X == 1 && amount.Y == 1)
+            {
+                Texture texture = new Texture((uint)width, (uint)height);
+                Texture.Bind(texture);
+                {
+                    Gl.glTexParameteri(Gl.GL_TEXTURE_2D, Gl.GL_TEXTURE_MAG_FILTER, Gl.GL_LINEAR);
+                    Gl.glTexParameteri(Gl.GL_TEXTURE_2D, Gl.GL_TEXTURE_MIN_FILTER, Gl.GL_LINEAR);
+                    Gl.glTexImage2D(
+                        Gl.GL_TEXTURE_2D, 0, IL.GetInteger(ILIntegerMode.ImageBytesPerPixel),
+                        width, height, 0,
+                        IL.GetInteger(ILIntegerMode.ImageFormat), ILDefines.IL_UNSIGNED_BYTE,
+                        IL.GetData()
+                        );
+                }
+                Texture.Bind(null);
+                textures.Add(new List<Texture>());
+                textures[0].Add(texture);
+            }
+            else
+            {
+                Gl.glTexParameteri(Gl.GL_TEXTURE_2D, Gl.GL_TEXTURE_MAG_FILTER, Gl.GL_LINEAR);
+                Gl.glTexParameteri(Gl.GL_TEXTURE_2D, Gl.GL_TEXTURE_MIN_FILTER, Gl.GL_LINEAR);
+
+                Console.WriteLine(width + "x" + height + " image cut into " + amount.X + " by " + amount.Y + " pieces.");
+
+                Vector2i currentSize = new Vector2i(width, height);
+                Vector2i pos = new Vector2i();
+
+                for (int iy = 0; iy < amount.Y; iy++)
+                {
+                    textures.Add(new List<Texture>());
+
+                    int h = Math.Min(currentSize.Y, sectionSize);
+                    currentSize.Y -= h;
+                    currentSize.X = width;
+
+                    for (int ix = 0; ix < amount.X; ix++)
+                    {
+                        int w = Math.Min(currentSize.X, sectionSize);
+                        currentSize.X -= w;
+
+                        Texture texture = new Texture((uint)w, (uint)h);
+                        Texture.Bind(texture);
+                        {
+                            Console.WriteLine(w + "  " + h);
+
+                            IntPtr partPtr = Marshal.AllocHGlobal((w * h) * 4);
+                            IL.CopyPixels(pos.X, pos.Y, 0, w, h, 1, DevIL.DataFormat.RGBA, DevIL.DataType.UnsignedByte, partPtr);
+                            //IntPtr partPtr = Marshal.AllocHGlobal(part.Length);
+                            //Marshal.Copy(part, 0, partPtr, part.Length);
+
+                            Gl.glTexImage2D(
+                                Gl.GL_TEXTURE_2D, 0, IL.GetInteger(ILIntegerMode.ImageBytesPerPixel),
+                                w, h, 0,
+                                IL.GetInteger(ILIntegerMode.ImageFormat), ILDefines.IL_UNSIGNED_BYTE,
+                                partPtr
+                                );
+                        }
+                        Texture.Bind(null);
+
+                        textures[iy].Add(texture);
+
+                        pos.X += w;
+                    }
+                    pos.Y += h;
+                    pos.X = 0;
+                }
+            }
+
+            return textures;
         }
 
         /// <param name="filename">Animated Image (ie: animated gif).</param>

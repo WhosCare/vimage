@@ -11,6 +11,7 @@ namespace vimage
         private List<dynamic> Children = new List<dynamic>();
         private int DrawListIndex = 0;
         public DisplayObject Parent = null;
+        private Vector2u _Size = new Vector2u();
 
         public bool Visible = true;
 
@@ -115,6 +116,12 @@ namespace vimage
                 Rotation = Rotation + amount + 360;
             else
                 Rotation += amount;
+        }
+
+        public virtual Vector2u Size
+        {
+            get { return _Size; }
+            set { _Size = value; }
         }
 
     }

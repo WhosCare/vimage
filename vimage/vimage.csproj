@@ -98,6 +98,7 @@
     <Compile Include="Source\ContextMenu.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Source\Display\AdvancedImage.cs" />
     <Compile Include="Source\Display\AnimatedImage.cs" />
     <Compile Include="Source\Display\DisplayObject.cs" />
     <Compile Include="Source\Display\DWM.cs" />
